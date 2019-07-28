@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<block>
+  <name>usb_com_read</name>
+  <key>usb_com_read_usb_com_read</key>
+  <category>usb_com_read</category>
+  <import>import usb_com_read</import>
+  <make>usb_com_read.usb_com_read($device, $parity, $baudrate, $stopbits, $bytesize, $wait_for_newline)</make>
+  <!-- Make one 'param' node for every Parameter you want settable from the GUI.
+       Sub-nodes:
+       * name
+       * key (makes the value accessible as $keyname, e.g. in the make node)
+       * type -->
+  <param>
+    <name>...</name>
+    <key>...</key>
+    <type>...</type>
+  </param>
+
+  <!-- Make one 'sink' node per input. Sub-nodes:
+       * name (an identifier for the GUI)
+       * type
+       * vlen
+       * optional (set to 1 for optional inputs) -->
+  <sink>
+    <name>in</name>
+    <type><!-- e.g. int, float, complex, byte, short, xxx_vector, ...--></type>
+  </sink>
+
+  <!-- Make one 'source' node per output. Sub-nodes:
+       * name (an identifier for the GUI)
+       * type
+       * vlen
+       * optional (set to 1 for optional inputs) -->
+  <source>
+    <name>out</name>
+    <type><!-- e.g. int, float, complex, byte, short, xxx_vector, ...--></type>
+  </source>
+</block>
