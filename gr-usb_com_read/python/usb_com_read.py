@@ -154,22 +154,31 @@ class usb_com_read(gr.sync_block):
         # Release the lock
 
         out = output_items[0]
-        print(len(out))
-        buff_np = numpy.array(self.buff)
-        buff_np_len = len(buff_np)
+        out_len = len(out)
+
+        buff_len = len(self.buff)
+
+        # take care of overflow
+        if out_len < buff_len:
+            copy_len = out_len
+        else:
+            copy_len = buff_len
+
+        # buff_np = numpy.array(self.buff)
+        # buff_np_len = len(buff_np)
         # print(buff_np)
 
         with self.buff_lock:
             # copy from buff to output_items
             # out[:] = self.buff[:]
+            out[:copy_len] = self.buff[:copy_len]
 
-            # copy from buff_np
-            out[0:buff_np_len] = buff_np[:]
+            # clear the buffer
+            self.buff.clear()
 
         # print("buff_lock released")
         # print(self.buff[:])
         # print(out[:])
 
-        return len(output_items[0])
-
+        return len(self.buff)
 
