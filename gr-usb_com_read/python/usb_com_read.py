@@ -37,35 +37,35 @@ class usb_com_read(gr.sync_block):
             name="usb_com_read",
             in_sig=None,
             out_sig=[numpy.int32])
-        
+
         self.device = device
         self.parity = parity
         self.baudrate = baudrate
         self.stopbits = stopbits
         self.bytesize = bytesize
         self.wait_for_newline = wait_for_newline
-        #print(device,parity, baudrate, stopbits, bytesize, wait_for_newline)
+        # print(device,parity, baudrate, stopbits, bytesize, wait_for_newline)
 
-        
-        #set parity
-        
+
+        # set parity
+
         if self.parity == 0:
             self.parity = serial.PARITY_NONE
         elif self.parity == 1:
             self.parity = serial.PARITY_EVEN
         else:
             self.parity = serial.PARITY_ODD
-        
+
         if self.stopbits == 1:
             self.stopbits = serial.STOPBITS_ONE
         elif self.stopbits == 2:
             self.stopbits = serial.STOPBITS_TWO
-        
+
         if self.bytesize == 7:
             self.bytesize = serial.SEVENBITS
         else:
             self.bytesize = serial.EIGHTBITS
-        
+
         # configure the serial connections (the parameters differs on the device you are connecting to)
         self.ser = serial.Serial(
             port=self.device,
@@ -75,14 +75,14 @@ class usb_com_read(gr.sync_block):
             bytesize=self.bytesize,
             timeout=2
         )
-    
-        
-        ## Buffer and lock
-        #self.rbuff = rb.ring_buffer(BUFF_SIZE)
+
+
+        # Buffer and lock
+        # self.rbuff = rb.ring_buffer(BUFF_SIZE)
         self.buff_lock = Lock()
         self.buff = [0]
 
-        #write_thread = Thread(target=work_fn, args=(buff, buff_lock, ser))
+        # write_thread = Thread(target=work_fn, args=(buff, buff_lock, ser))
         self.stop_threads= False
         read_thread = Thread(target=self.rx_work, args=(self.buff, self.buff_lock, self.ser))
         read_thread.start()
@@ -96,15 +96,13 @@ class usb_com_read(gr.sync_block):
             bytesize=serial.EIGHTBITS
         )
         '''
-            
+
         """
         print "Opened: ",self.ser.portstr       # check which port was really used
         self.ser.write("hel;lkfsdsa;lkfjdsaflo\n\r")      # write a string
         #ser.close()             # close port
         """
-
-
-    ## Thread to read from the serial port and to write to the buff. 
+    # Thread to read from the serial port and to write to the buff.
     # reads one line at a time and add to the buff.
     # @buff buffer to read into.
     # @buff_lock lock to serialize buffer access. Should be the lock from "threadding" package.
@@ -113,20 +111,20 @@ class usb_com_read(gr.sync_block):
         """
         Lock mutex
             read from the serial port. ----?? how much data to be read.
-            write the data into buffer. 
-            mark underflow or overflow if any. 
+            write the data into buffer.
+            mark underflow or overflow if any.
         Unlock mutex
         """
         print("rx_work started")
-        while(1):
+        while 1:
             if self.stop_threads:
-                    break
-            
-            ## Need to raise a non fatal exception. 
-            #raise IOvrror("Serial port is not open")
-            if(ser.is_open == False):
+                break
+
+            # Need to raise a non fatal exception.
+            # raise IOvrror("Serial port is not open")
+            if ser.is_open is False:
                 continue
-            
+
             """    
             if(self.wait_for_newline):
                 line = ser.readline()
@@ -139,40 +137,39 @@ class usb_com_read(gr.sync_block):
             except:
                 break
             print("rx_work")
-            bytes_read = len(tmp_buff)
-            ##print (bytes_read)
+            # bytes_read = len(tmp_buff)
+            # print (bytes_read)
 
             with self.buff_lock:
-                ##buff = tmp_buff[:]
+                # buff = tmp_buff[:]
                 buff.extend(tmp_buff[:])
-                
-            #print(tmp_buff[:])
-            #print(buff[:])
+
+            # print(tmp_buff[:])
+            # print(buff[:])
 
 
     def work(self, input_items, output_items):
-        ##
         # Acquire the lock
         # copy buffer and update the nooutput_items.
-        # Release the lock 
-         
+        # Release the lock
+
         out = output_items[0]
-        print(len(out)) 
+        print(len(out))
         buff_np = numpy.array(self.buff)
-        
-        #print(buff_np)
+        buff_np_len = len(buff_np)
+        # print(buff_np)
 
         with self.buff_lock:
             # copy from buff to output_items
-            #out[:] = self.buff[:]
+            # out[:] = self.buff[:]
 
             # copy from buff_np
-            out[:] = buff_np[:]
-        
-        #print("buff_lock released")
-        #print(self.buff[:])
-        #print(out[:])
-        
+            out[0:buff_np_len] = buff_np[:]
+
+        # print("buff_lock released")
+        # print(self.buff[:])
+        # print(out[:])
+
         return len(output_items[0])
 
 
