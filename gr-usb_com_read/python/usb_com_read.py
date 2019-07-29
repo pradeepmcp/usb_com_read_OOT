@@ -80,7 +80,7 @@ class usb_com_read(gr.sync_block):
         # Buffer and lock
         # self.rbuff = rb.ring_buffer(BUFF_SIZE)
         self.buff_lock = Lock()
-        self.buff = [0]
+        self.buff = []
 
         # write_thread = Thread(target=work_fn, args=(buff, buff_lock, ser))
         self.stop_threads= False
@@ -131,21 +131,28 @@ class usb_com_read(gr.sync_block):
             else:
                 line = ser.read()
             """
+
             tmp_buff = []
+            # tmp_buff = numpy.array([1024],dtype=numpy.int32)
+
             try:
                 tmp_buff = ser.read(1024)
             except:
                 break
+            
+            tmp_buff = list(map(ord,tmp_buff))
+
             print("rx_work")
+            # print(type(tmp_buff[0]))
             # bytes_read = len(tmp_buff)
             # print (bytes_read)
 
             with self.buff_lock:
-                # buff = tmp_buff[:]
-                buff.extend(tmp_buff[:])
+                print("entered here")
+                self.buff.extend(tmp_buff[:])
 
-            # print(tmp_buff[:])
-            # print(buff[:])
+            print(tmp_buff[:])
+            print(self.buff[:])
 
 
     def work(self, input_items, output_items):
@@ -166,19 +173,22 @@ class usb_com_read(gr.sync_block):
 
         # buff_np = numpy.array(self.buff)
         # buff_np_len = len(buff_np)
-        # print(buff_np)
+        # print(self.buff)
+        # print(copy_len)
 
         with self.buff_lock:
             # copy from buff to output_items
             # out[:] = self.buff[:]
-            out[:copy_len] = self.buff[:copy_len]
-
+            out[0:copy_len] = self.buff[0:copy_len]
+            # out[0:copy_len] = buff_np[0:copy_len]
             # clear the buffer
-            self.buff.clear()
+            # del self.buff[:]
 
-        # print("buff_lock released")
-        # print(self.buff[:])
-        # print(out[:])
+        #print("buff_lock released")
+        # if copy_len:
+            # print(self.buff[:])
+            # print(out[:copy_len])
 
-        return len(self.buff)
+        return copy_len 
+        # return len(out)
 
