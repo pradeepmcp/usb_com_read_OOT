@@ -84,7 +84,10 @@ class usb_com_read(gr.sync_block):
 
         # write_thread = Thread(target=work_fn, args=(buff, buff_lock, ser))
         self.stop_threads= False
-        read_thread = Thread(target=self.rx_work, args=(self.buff, self.buff_lock, self.ser))
+        
+        # read_thread = Thread(target=self.rx_work, args=(self.buff, self.buff_lock, self.ser))
+        read_thread = Thread(target=self.rx_work, args=())
+
         read_thread.start()
 
         '''
@@ -107,7 +110,7 @@ class usb_com_read(gr.sync_block):
     # @buff buffer to read into.
     # @buff_lock lock to serialize buffer access. Should be the lock from "threadding" package.
     # @ser instance of the serial class.
-    def rx_work(self, buff, buff_lock, ser):
+    def rx_work(self):
         """
         Lock mutex
             read from the serial port. ----?? how much data to be read.
@@ -122,7 +125,7 @@ class usb_com_read(gr.sync_block):
 
             # Need to raise a non fatal exception.
             # raise IOvrror("Serial port is not open")
-            if ser.is_open is False:
+            if self.ser.is_open is False:
                 continue
 
             """    
@@ -136,7 +139,7 @@ class usb_com_read(gr.sync_block):
             # tmp_buff = numpy.array([1024],dtype=numpy.int32)
 
             try:
-                tmp_buff = ser.read(1024)
+                tmp_buff = self.ser.read(1024)
             except:
                 break
             
@@ -150,9 +153,8 @@ class usb_com_read(gr.sync_block):
             with self.buff_lock:
                 print("entered here")
                 self.buff.extend(tmp_buff[:])
-
-            print(tmp_buff[:])
-            print(self.buff[:])
+                print(tmp_buff[:])
+                print(self.buff[:])
 
 
     def work(self, input_items, output_items):
@@ -177,17 +179,20 @@ class usb_com_read(gr.sync_block):
         # print(copy_len)
 
         with self.buff_lock:
+            # print("buff_lock acquired")
             # copy from buff to output_items
             # out[:] = self.buff[:]
-            out[0:copy_len] = self.buff[0:copy_len]
             # out[0:copy_len] = buff_np[0:copy_len]
-            # clear the buffer
-            # del self.buff[:]
-
-        #print("buff_lock released")
-        # if copy_len:
-            # print(self.buff[:])
-            # print(out[:copy_len])
+            if copy_len:
+                out[0:copy_len] = self.buff[0:copy_len]
+                print("copy_len")
+                print(copy_len)
+                print(self.buff[:copy_len])
+                print(out[:copy_len])
+                # clear the buffer
+                del self.buff[:]
+                print(len(out))
+            #print("buff_lock released")
 
         return copy_len 
         # return len(out)
