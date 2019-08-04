@@ -80,7 +80,8 @@ class usb_com_read(gr.sync_block):
         # Buffer and lock
         # self.rbuff = rb.ring_buffer(BUFF_SIZE)
         self.buff_lock = Lock()
-        self.buff = []
+        # self.buff = []
+        sef.buff = numpy.array((),dtype=numpy.uint8)
 
         # write_thread = Thread(target=work_fn, args=(buff, buff_lock, ser))
         self.stop_threads= False
@@ -136,23 +137,27 @@ class usb_com_read(gr.sync_block):
             """
 
             tmp_buff = []
-            # tmp_buff = numpy.array([1024],dtype=numpy.int32)
+            # tmp_buff = numpy.array([1024],dtype=numpy.uint8)
 
             try:
                 tmp_buff = self.ser.read(1024)
+                # self.ser.read_into_buff(tmp_buff, 1024)
             except:
                 break
             
+            print(type(tmp_buff))
             tmp_buff = list(map(ord,tmp_buff))
 
-            print("rx_work")
-            # print(type(tmp_buff[0]))
-            # bytes_read = len(tmp_buff)
+            # print("rx_work")
+            print(type(tmp_buff[0]))
+            print(type(tmp_buff))
+            self.bytes_read = len(tmp_buff)
             # print (bytes_read)
 
             with self.buff_lock:
                 print("entered here")
-                self.buff.extend(tmp_buff[:])
+                # self.buff.extend(tmp_buff[:])
+                numpy.insert(self.buff, len(self.buff), tmp_buff)
                 print(tmp_buff[:])
                 print(self.buff[:])
 
@@ -184,15 +189,27 @@ class usb_com_read(gr.sync_block):
             # out[:] = self.buff[:]
             # out[0:copy_len] = buff_np[0:copy_len]
             if copy_len:
+                
+                # Check if the byte_read is even
+                # If odd, drop one sample by finding the first delimiter and dropping the sample
+                if self.bytes_read % 2 == 1:
+                    # Drop the partial bytes of a sample. 
+                    # <<< Add code here >>>
+
                 out[0:copy_len] = self.buff[0:copy_len]
+                
+                # Debug prints
                 print("copy_len")
                 print(copy_len)
                 print(self.buff[:copy_len])
                 print(out[:copy_len])
+                
                 # clear the buffer
-                del self.buff[:]
+                # del self.buff[:]
+                numpy.delete(self.buff, slice(None, None), 0)
+
                 print(len(out))
-            #print("buff_lock released")
+                #print("buff_lock released")
 
         return copy_len 
         # return len(out)
