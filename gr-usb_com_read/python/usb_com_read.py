@@ -27,16 +27,30 @@ import serial
 
 BUFF_SIZE = 1024
 
+
+class DelimiterNotFoundError(Exception):
+    """Exception in the case delimiter was not found"""
+    pass
+
 class usb_com_read(gr.sync_block):
     """
     docstring for block usb_com_read
     """
 
-    def __init__(self, device,parity,baudrate,stopbits,bytesize,wait_for_newline):
+    def __init__(self, device,parity, baudrate, stopbits, bytesize, wait_for_newline):
         gr.sync_block.__init__(self,
             name="usb_com_read",
             in_sig=None,
             out_sig=[numpy.int32])
+
+        # cluster of samples from USB will be interleaved with a delimiter 0xffff (2 bytes)
+        # this is to identify the start of the samples. 
+        # In the data read, bytes till the first delimiter are purged.
+        # in the worst case, cluster_len_samples of bytes can be lost.
+        self.cluster_len_samples = 4
+        self.cluster_len_bytes = self.cluster_len_samples * 2
+        self.delimiter_len_bytes = 2
+        self.delimiter = 0xff
 
         self.device = device
         self.parity = parity
@@ -45,9 +59,6 @@ class usb_com_read(gr.sync_block):
         self.bytesize = bytesize
         self.wait_for_newline = wait_for_newline
         # print(device,parity, baudrate, stopbits, bytesize, wait_for_newline)
-
-
-        # set parity
 
         if self.parity == 0:
             self.parity = serial.PARITY_NONE
@@ -76,36 +87,17 @@ class usb_com_read(gr.sync_block):
             timeout=2
         )
 
-
         # Buffer and lock
-        # self.rbuff = rb.ring_buffer(BUFF_SIZE)
         self.buff_lock = Lock()
-        # self.buff = []
-        sef.buff = numpy.array((),dtype=numpy.uint8)
+        self.buff = []
+        # sef.buff = numpy.array((),dtype=numpy.uint8)
 
-        # write_thread = Thread(target=work_fn, args=(buff, buff_lock, ser))
         self.stop_threads= False
-        
-        # read_thread = Thread(target=self.rx_work, args=(self.buff, self.buff_lock, self.ser))
-        read_thread = Thread(target=self.rx_work, args=())
 
+        # rx_worker thread
+        read_thread = Thread(target=self.rx_work, args=())
         read_thread.start()
 
-        '''
-        self.ser = serial.Serial(
-            port=self.device,
-            baudrate=self.baudrate,
-            parity=serial.PARITY_NONE,
-            stopbits=serial.STOPBITS_ONE,
-            bytesize=serial.EIGHTBITS
-        )
-        '''
-
-        """
-        print "Opened: ",self.ser.portstr       # check which port was really used
-        self.ser.write("hel;lkfsdsa;lkfjdsaflo\n\r")      # write a string
-        #ser.close()             # close port
-        """
     # Thread to read from the serial port and to write to the buff.
     # reads one line at a time and add to the buff.
     # @buff buffer to read into.
@@ -115,7 +107,7 @@ class usb_com_read(gr.sync_block):
         """
         Lock mutex
             read from the serial port. ----?? how much data to be read.
-            write the data into buffer.
+            Append the data to the self.buff list
             mark underflow or overflow if any.
         Unlock mutex
         """
@@ -129,44 +121,36 @@ class usb_com_read(gr.sync_block):
             if self.ser.is_open is False:
                 continue
 
-            """    
-            if(self.wait_for_newline):
-                line = ser.readline()
-            else:
-                line = ser.read()
-            """
-
-            tmp_buff = []
             # tmp_buff = numpy.array([1024],dtype=numpy.uint8)
 
+            # Add exception handling
             try:
                 tmp_buff = self.ser.read(1024)
-                # self.ser.read_into_buff(tmp_buff, 1024)
             except:
                 break
             
-            print(type(tmp_buff))
-            tmp_buff = list(map(ord,tmp_buff))
+            #print(type(tmp_buff))
+            #tmp_buff = list(map(ord,tmp_buff))
 
             # print("rx_work")
             print(type(tmp_buff[0]))
             print(type(tmp_buff))
-            self.bytes_read = len(tmp_buff)
+            # self.bytes_read = len(tmp_buff)
             # print (bytes_read)
 
             with self.buff_lock:
                 print("entered here")
-                # self.buff.extend(tmp_buff[:])
-                numpy.insert(self.buff, len(self.buff), tmp_buff)
+                self.buff.extend(tmp_buff)
+                # numpy.insert(self.buff, len(self.buff), tmp_buff)
                 print(tmp_buff[:])
                 print(self.buff[:])
-
 
     def work(self, input_items, output_items):
         # Acquire the lock
         # copy buffer and update the nooutput_items.
         # Release the lock
 
+        """
         out = output_items[0]
         out_len = len(out)
 
@@ -177,6 +161,7 @@ class usb_com_read(gr.sync_block):
             copy_len = out_len
         else:
             copy_len = buff_len
+        """
 
         # buff_np = numpy.array(self.buff)
         # buff_np_len = len(buff_np)
@@ -184,33 +169,67 @@ class usb_com_read(gr.sync_block):
         # print(copy_len)
 
         with self.buff_lock:
-            # print("buff_lock acquired")
-            # copy from buff to output_items
-            # out[:] = self.buff[:]
-            # out[0:copy_len] = buff_np[0:copy_len]
-            if copy_len:
-                
-                # Check if the byte_read is even
-                # If odd, drop one sample by finding the first delimiter and dropping the sample
-                if self.bytes_read % 2 == 1:
-                    # Drop the partial bytes of a sample. 
-                    # <<< Add code here >>>
+            # Convert the data to int from string object.
+            # Remove the data from beginning until the first delimiter.
+            # Remove the data from the end till the last delimiter by traversing back.
+            # raise an exception if there is no delimiter.
+            # if the length of the self.buff after purging is odd, raise an exception.
+            # Convert self.buff to uint16 and copy to output_items[0]
+            # take care of overflow.
+            buff = list(map(ord, self.buff))
 
-                out[0:copy_len] = self.buff[0:copy_len]
-                
-                # Debug prints
-                print("copy_len")
-                print(copy_len)
-                print(self.buff[:copy_len])
-                print(out[:copy_len])
-                
-                # clear the buffer
-                # del self.buff[:]
-                numpy.delete(self.buff, slice(None, None), 0)
+            # purge from the beginning
+            idx = find_start(buff)
+            buff = buff[idx:]
 
-                print(len(out))
-                #print("buff_lock released")
+            # purge from the end
+            rbuff = buff[::-1]
+            idx = find_start(rbuff)
+            buff = buff[:len(buff)-idx]
+
+            # exception if length is odd.
+            if (len(buff) % 2) == 1:
+                raise IndexError
+
+            # Convert self.buff to uint16 and copy
+            n_buff = numpy.array(buff, dtype=numpy.uint8)
+            copy_len = len(n_buff) >> 1
+            out[0:copy_len] = n_buff.view(dtype=numpy.uint16)
+            # out[0:copy_len] = self.buff[0:copy_len]
+
+            # Debug prints
+            print("copy_len")
+            print(copy_len)
+            print(self.buff[:copy_len])
+            print(out[:copy_len])
+
+            # clear the buffer
+            del self.buff[:]
+            # Below is wrong. Not sure how it is working.
+            # numpy.delete(self.buff, slice(None, None), 0)
+
+            print(len(out))
+            # print("buff_lock released")
 
         return copy_len 
         # return len(out)
+
+    def find_start(buff):
+        index = 0
+        last_index = (self.cluster_len_bytes + (self.delimiter_len_bytes * 2) - 2)
+
+        # if the array length is less than a cluster raise exception and return
+        if len(buff) < last_index:
+            raise IndexError
+            return
+
+        while index < last_index:
+            if buff[index] == self.delimiter and array[index + 1] == self.delimiter:
+                return index + 2
+            index = index + 1
+
+        # raise an exception as the delimiter was not found.
+        raise DelimiterNotFoundError
+
+
 
