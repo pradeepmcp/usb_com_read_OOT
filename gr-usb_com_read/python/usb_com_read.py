@@ -111,10 +111,8 @@ class usb_com_read(gr.sync_block):
             mark underflow or overflow if any.
         Unlock mutex
         """
+        tmp_buff = []
         while 1:
-            if self.stop_threads:
-                break
-
             # Need to raise a non fatal exception.
             # raise IOvrror("Serial port is not open")
             if self.ser.is_open is False:
@@ -124,25 +122,43 @@ class usb_com_read(gr.sync_block):
 
             # Add exception handling
             try:
-                tmp_buff = self.ser.read(1024)
+                # tmp_buff = self.ser.read(1024)
+                data_ser = self.ser.read(1024)
+
+                tmp_buff.extend(data_ser)
+                print("rx_work")
             except:
                 break
-            
+
             #print(type(tmp_buff))
             #tmp_buff = list(map(ord,tmp_buff))
 
-            # print("rx_work")
+
             # print(type(tmp_buff[0]))
             # print(type(tmp_buff))
             # self.bytes_read = len(tmp_buff)
             # print (bytes_read)
-
+            """
             with self.buff_lock:
-                print("rx_wokr() entered here")
+                print("rx_work() entered here")
                 self.buff.extend(tmp_buff)
                 # numpy.insert(self.buff, len(self.buff), tmp_buff)
                 # print(tmp_buff[:])
                 # print(self.buff[:])
+            """
+            # Make sure we don't sleep if the lock() is taken. Instead read the serial port.
+            try:
+                locked = self.buff_lock.acquire(False)
+                if locked:
+                    print("rx_work() entered here")
+                    self.buff.extend(tmp_buff)
+                    del tmp_buff[:]
+                else:
+                    continue
+            finally:
+                if locked:
+                    self.buff_lock.release()
+
             print("rx_work() exited here")
 
     def find_start(self, buff):
