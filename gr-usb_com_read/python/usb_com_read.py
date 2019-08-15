@@ -111,7 +111,6 @@ class usb_com_read(gr.sync_block):
             mark underflow or overflow if any.
         Unlock mutex
         """
-        print("rx_work started")
         while 1:
             if self.stop_threads:
                 break
@@ -133,25 +132,43 @@ class usb_com_read(gr.sync_block):
             #tmp_buff = list(map(ord,tmp_buff))
 
             # print("rx_work")
-            print(type(tmp_buff[0]))
-            print(type(tmp_buff))
+            # print(type(tmp_buff[0]))
+            # print(type(tmp_buff))
             # self.bytes_read = len(tmp_buff)
             # print (bytes_read)
 
             with self.buff_lock:
-                print("entered here")
+                print("rx_wokr() entered here")
                 self.buff.extend(tmp_buff)
                 # numpy.insert(self.buff, len(self.buff), tmp_buff)
-                print(tmp_buff[:])
-                print(self.buff[:])
+                # print(tmp_buff[:])
+                # print(self.buff[:])
+            print("rx_work() exited here")
+
+    def find_start(self, buff):
+        index = 0
+        last_index = (self.cluster_len_bytes + (self.delimiter_len_bytes * 2) - 2)
+
+        # if the array length is less than a cluster raise exception and return
+        if len(buff) < last_index:
+            raise IndexError
+            return
+
+        while index < last_index:
+            if buff[index] == self.delimiter and buff[index + 1] == self.delimiter:
+                return index + 2
+            index = index + 1
+
+        # raise an exception as the delimiter was not found.
+        raise DelimiterNotFoundError
 
     def work(self, input_items, output_items):
         # Acquire the lock
         # copy buffer and update the nooutput_items.
         # Release the lock
 
-        """
         out = output_items[0]
+        """
         out_len = len(out)
 
         buff_len = len(self.buff)
@@ -173,19 +190,35 @@ class usb_com_read(gr.sync_block):
             # Remove the data from beginning until the first delimiter.
             # Remove the data from the end till the last delimiter by traversing back.
             # raise an exception if there is no delimiter.
-            # if the length of the self.buff after purging is odd, raise an exception.
+            # remove delimiters
+            # if the length of the self.buff is odd, raise an exception.
             # Convert self.buff to uint16 and copy to output_items[0]
             # take care of overflow.
+
+            # print("self.buff len ", len(self.buff))
             buff = list(map(ord, self.buff))
 
             # purge from the beginning
-            idx = find_start(buff)
+            # print("front purge ", len(buff))
+            if len(self.buff) < (self.cluster_len_bytes + (self.delimiter_len_bytes * 2) - 2):
+                return 0
+            idx = self.find_start(buff)
             buff = buff[idx:]
 
             # purge from the end
+            # print("rear purge ", len(buff))
             rbuff = buff[::-1]
-            idx = find_start(rbuff)
+
+            if len(rbuff) < (self.cluster_len_bytes + (self.delimiter_len_bytes * 2) - 2):
+                return 0
+            idx = self.find_start(rbuff)
             buff = buff[:len(buff)-idx]
+
+            # this is required to finally delete only the bytes consumed and leave the rest in the self.buff
+            rem_bytes = idx
+
+            # remove delimiters
+            buff = filter(lambda elm: elm != 255, buff)
 
             # exception if length is odd.
             if (len(buff) % 2) == 1:
@@ -200,11 +233,12 @@ class usb_com_read(gr.sync_block):
             # Debug prints
             print("copy_len")
             print(copy_len)
-            print(self.buff[:copy_len])
+            # print(self.buff[:copy_len])
             print(out[:copy_len])
 
             # clear the buffer
-            del self.buff[:]
+            bytes_left = len(rbuff) - (len(buff))
+            del self.buff[:-rem_bytes]
             # Below is wrong. Not sure how it is working.
             # numpy.delete(self.buff, slice(None, None), 0)
 
@@ -213,23 +247,4 @@ class usb_com_read(gr.sync_block):
 
         return copy_len 
         # return len(out)
-
-    def find_start(buff):
-        index = 0
-        last_index = (self.cluster_len_bytes + (self.delimiter_len_bytes * 2) - 2)
-
-        # if the array length is less than a cluster raise exception and return
-        if len(buff) < last_index:
-            raise IndexError
-            return
-
-        while index < last_index:
-            if buff[index] == self.delimiter and array[index + 1] == self.delimiter:
-                return index + 2
-            index = index + 1
-
-        # raise an exception as the delimiter was not found.
-        raise DelimiterNotFoundError
-
-
 
