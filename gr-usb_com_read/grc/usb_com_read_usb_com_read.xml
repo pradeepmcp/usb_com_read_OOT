@@ -1,38 +1,90 @@
 <?xml version="1.0"?>
+<!--
+###################################################
+##Virtual Channel Formatter
+###################################################
+ -->
 <block>
-  <name>usb_com_read</name>
-  <key>usb_com_read_usb_com_read</key>
-  <category>usb_com_read</category>
-  <import>import usb_com_read</import>
-  <make>usb_com_read.usb_com_read($device, $parity, $baudrate, $stopbits, $bytesize, $wait_for_newline)</make>
-  <!-- Make one 'param' node for every Parameter you want settable from the GUI.
-       Sub-nodes:
-       * name
-       * key (makes the value accessible as $keyname, e.g. in the make node)
-       * type -->
-  <param>
-    <name>...</name>
-    <key>...</key>
-    <type>...</type>
-  </param>
+    <name>usb_com_read</name>
+    <key>usb_com_read</key>
+    <import>import usb_com_read</import>
+    <make>usb_com_read.usb_com_read($device,$parity,$baudrate,$stopbits,$bytesize,$waitfornewline)</make>
+    <param>
+        <name>Device Path</name>
+        <key>device</key>
+        <type>string</type>
+    </param>
+    <param>
+        <name>Stop Bits</name>
+        <key>stopbits</key>
+        <type>int</type>
+        <option>
+			<name>ONE</name>
+			<key>1</key>
+		</option>
+        <option>
+			<name>TWO</name>
+			<key>2</key>
+		</option>
+    </param>
+    <param>
+    <name>Parity</name>
+        <key>parity</key>
+        <type>int</type>
+        <option>
+			<name>NONE</name>
+			<key>0</key>
+		</option>
+        <option>
+			<name>EVEN</name>
+			<key>1</key>
+		</option>
+        <option>
+			<name>ODD</name>
+			<key>2</key>
+		</option>
+    </param>
+    <param>
+    <name>Byte Size</name>
+        <key>bytesize</key>
+        <type>int</type>
+        <option>
+			<name>7</name>
+			<key>7</key>
+		</option>
+        <option>
+			<name>8</name>
+			<key>8</key>
+        </option>
+    </param>
+    <param>
+    <name>Wait For New Line?</name>
+        <key>waitfornewline</key>
+        <type>bool</type>
+        <option>
+			<name>Yes</name>
+			<key>True</key>
+		</option>
+        <option>
+			<name>No</name>
+			<key>False</key>
+        </option>
+    </param>
+    <param>
+        <name>Buad Rate</name>
+        <key>baudrate</key>
+        <type>int</type>
+    </param>
+    <!--    
+    <sink>
+        <name>to_serial</name>
+        <type></type>
+    </sink>
+    -->
+    <source>
+        <name>from_serial</name>
+        <type></type>
+    </source>
 
-  <!-- Make one 'sink' node per input. Sub-nodes:
-       * name (an identifier for the GUI)
-       * type
-       * vlen
-       * optional (set to 1 for optional inputs) -->
-  <sink>
-    <name>in</name>
-    <type><!-- e.g. int, float, complex, byte, short, xxx_vector, ...--></type>
-  </sink>
-
-  <!-- Make one 'source' node per output. Sub-nodes:
-       * name (an identifier for the GUI)
-       * type
-       * vlen
-       * optional (set to 1 for optional inputs) -->
-  <source>
-    <name>out</name>
-    <type><!-- e.g. int, float, complex, byte, short, xxx_vector, ...--></type>
-  </source>
+ 
 </block>
