@@ -58,7 +58,6 @@ class usb_com_read(gr.sync_block):
         self.stopbits = stopbits
         self.bytesize = bytesize
         self.wait_for_newline = wait_for_newline
-        # print(device,parity, baudrate, stopbits, bytesize, wait_for_newline)
 
         if self.parity == 0:
             self.parity = serial.PARITY_NONE
@@ -90,9 +89,6 @@ class usb_com_read(gr.sync_block):
         # Buffer and lock
         self.buff_lock = Lock()
         self.buff = []
-        # sef.buff = numpy.array((),dtype=numpy.uint8)
-
-        self.stop_threads= False
 
         # rx_worker thread
         read_thread = Thread(target=self.rx_work, args=())
@@ -101,56 +97,27 @@ class usb_com_read(gr.sync_block):
     # Thread to read from the serial port and to write to the buff.
     # reads one line at a time and add to the buff.
     # @buff buffer to read into.
-    # @buff_lock lock to serialize buffer access. Should be the lock from "threadding" package.
+    # @buff_lock lock to serialize buffer access. Should be the lock from "Threading" package.
     # @ser instance of the serial class.
     def rx_work(self):
         """
         Lock mutex
-            read from the serial port. ----?? how much data to be read.
+            read from the serial port.
             Append the data to the self.buff list
-            mark underflow or overflow if any.
         Unlock mutex
         """
         tmp_buff = []
         while 1:
-            # Need to raise a non fatal exception.
-            # raise IOvrror("Serial port is not open")
             if self.ser.is_open is False:
                 continue
 
-            # tmp_buff = numpy.array([1024],dtype=numpy.uint8)
+            data_ser = self.ser.read(1024)
+            tmp_buff.extend(data_ser)
 
-            # Add exception handling
-            try:
-                # tmp_buff = self.ser.read(1024)
-                data_ser = self.ser.read(1024)
-
-                tmp_buff.extend(data_ser)
-                print("rx_work")
-            except:
-                break
-
-            #print(type(tmp_buff))
-            #tmp_buff = list(map(ord,tmp_buff))
-
-
-            # print(type(tmp_buff[0]))
-            # print(type(tmp_buff))
-            # self.bytes_read = len(tmp_buff)
-            # print (bytes_read)
-            """
-            with self.buff_lock:
-                print("rx_work() entered here")
-                self.buff.extend(tmp_buff)
-                # numpy.insert(self.buff, len(self.buff), tmp_buff)
-                # print(tmp_buff[:])
-                # print(self.buff[:])
-            """
             # Make sure we don't sleep if the lock() is taken. Instead read the serial port.
             try:
                 locked = self.buff_lock.acquire(False)
                 if locked:
-                    print("rx_work() entered here")
                     self.buff.extend(tmp_buff)
                     del tmp_buff[:]
                 else:
@@ -158,8 +125,6 @@ class usb_com_read(gr.sync_block):
             finally:
                 if locked:
                     self.buff_lock.release()
-
-            print("rx_work() exited here")
 
     def find_start(self, buff):
         index = 0
@@ -178,89 +143,66 @@ class usb_com_read(gr.sync_block):
         # raise an exception as the delimiter was not found.
         raise DelimiterNotFoundError
 
+    # Convert the data to int from string object.
+    # Remove the data from beginning until the first delimiter.
+    # Remove the data from the end till the last delimiter by traversing back.
+    # raise an exception if there is no delimiter.
+    # remove delimiters
+    # if the length of the self.buff is odd, raise an exception.
+    # Convert self.buff to uint16 and copy to output_items[0]
+    # take care of overflow.
+    # @out output array to copy to. Should be a numpy array.
+    def format_copy(self, out):
+        buff = list(map(ord, self.buff))
+
+        # purge from the beginning
+        if len(self.buff) < (self.cluster_len_bytes + (self.delimiter_len_bytes * 2) - 2):
+            return 0
+        idx = self.find_start(buff)
+        buff = buff[idx:]
+
+        # purge from the end
+        rbuff = buff[::-1]
+
+        if len(rbuff) < (self.cluster_len_bytes + (self.delimiter_len_bytes * 2) - 2):
+            return 0
+        idx = self.find_start(rbuff)
+        buff = buff[:len(buff) - idx]
+
+        # this is required to finally delete only the bytes consumed and leave the rest in the self.buff
+        rem_bytes = idx
+
+        # remove delimiters
+        buff = filter(lambda elm: elm != 255, buff)
+
+        # exception if length is odd.
+        if (len(buff) % 2) == 1:
+            raise IndexError
+
+        # Convert self.buff to uint16 and copy
+        n_buff = numpy.array(buff, dtype=numpy.uint8)
+        copy_len = len(n_buff) >> 1
+        out[0:copy_len] = n_buff.view(dtype=numpy.uint16)
+
+        # clear the buffer
+        del self.buff[:-rem_bytes]
+
+        return copy_len
+
     def work(self, input_items, output_items):
         # Acquire the lock
-        # copy buffer and update the nooutput_items.
+        # copy buffer and return the number of items output
         # Release the lock
-
         out = output_items[0]
-        """
-        out_len = len(out)
-
-        buff_len = len(self.buff)
-
-        # take care of overflow
-        if out_len < buff_len:
-            copy_len = out_len
-        else:
-            copy_len = buff_len
-        """
-
-        # buff_np = numpy.array(self.buff)
-        # buff_np_len = len(buff_np)
-        # print(self.buff)
-        # print(copy_len)
-
-        with self.buff_lock:
-            # Convert the data to int from string object.
-            # Remove the data from beginning until the first delimiter.
-            # Remove the data from the end till the last delimiter by traversing back.
-            # raise an exception if there is no delimiter.
-            # remove delimiters
-            # if the length of the self.buff is odd, raise an exception.
-            # Convert self.buff to uint16 and copy to output_items[0]
-            # take care of overflow.
-
-            # print("self.buff len ", len(self.buff))
-            buff = list(map(ord, self.buff))
-
-            # purge from the beginning
-            # print("front purge ", len(buff))
-            if len(self.buff) < (self.cluster_len_bytes + (self.delimiter_len_bytes * 2) - 2):
-                return 0
-            idx = self.find_start(buff)
-            buff = buff[idx:]
-
-            # purge from the end
-            # print("rear purge ", len(buff))
-            rbuff = buff[::-1]
-
-            if len(rbuff) < (self.cluster_len_bytes + (self.delimiter_len_bytes * 2) - 2):
-                return 0
-            idx = self.find_start(rbuff)
-            buff = buff[:len(buff)-idx]
-
-            # this is required to finally delete only the bytes consumed and leave the rest in the self.buff
-            rem_bytes = idx
-
-            # remove delimiters
-            buff = filter(lambda elm: elm != 255, buff)
-
-            # exception if length is odd.
-            if (len(buff) % 2) == 1:
-                raise IndexError
-
-            # Convert self.buff to uint16 and copy
-            n_buff = numpy.array(buff, dtype=numpy.uint8)
-            copy_len = len(n_buff) >> 1
-            out[0:copy_len] = n_buff.view(dtype=numpy.uint16)
-            # out[0:copy_len] = self.buff[0:copy_len]
-
-            # Debug prints
-            print("copy_len")
-            print(copy_len)
-            # print(self.buff[:copy_len])
-            print(out[:copy_len])
-
-            # clear the buffer
-            bytes_left = len(rbuff) - (len(buff))
-            del self.buff[:-rem_bytes]
-            # Below is wrong. Not sure how it is working.
-            # numpy.delete(self.buff, slice(None, None), 0)
-
-            print(len(out))
-            # print("buff_lock released")
+        try:
+            locked = self.buff_lock.acquire(False)
+            if locked:
+                copy_len = self.format_copy(out)
+            else:
+                copy_len = 0
+        finally:
+            if locked:
+                self.buff_lock.release()
 
         return copy_len 
-        # return len(out)
 
