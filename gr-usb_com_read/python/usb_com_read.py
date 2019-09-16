@@ -149,10 +149,27 @@ class usb_com_read(gr.sync_block):
     # raise an exception if there is no delimiter.
     # remove delimiters
     # if the length of the self.buff is odd, raise an exception.
+    # ##### TO BE CHANGED FROM HERE
     # Convert self.buff to uint16 and copy to output_items[0]
+
+    # Convert self.buff and store it in converted_buff.
+    # Check for trigger condition and timer per division setting and copy only the required samples to out from
+    # converted_buff.
+    #
+    # for example:
+    # find the sample matching the trigger condition.
+    # from that sample we need to copy the number of samples based on Time per division setting.
+
+    # Number of divisions on display = 10.
+    # Sample rate = 2,000,00HZ => 5us.
+    # Time per division setting = 100us
+    # so each division will have 100us/5us=20 samples
+    # the total samples to be considered from the point where trigger condition is satisfied is
+    # 20 samples x 10 divisions = 200 samples.
     # take care of overflow.
+    #
     # @out output array to copy to. Should be a numpy array.
-    def format_copy(self, out):
+    def trigger_check(self, out):
         buff = list(map(ord, self.buff))
 
         # purge from the beginning
@@ -197,7 +214,7 @@ class usb_com_read(gr.sync_block):
         try:
             locked = self.buff_lock.acquire(False)
             if locked:
-                copy_len = self.format_copy(out)
+                copy_len = self.trigger_check(out)
             else:
                 copy_len = 0
         finally:
